@@ -1,60 +1,70 @@
 # MicGuard
 
-**耳机负责听，Mac 负责说。**
+A macOS background utility that restores the previous microphone once when a newly connected input device takes over the default input. Audio output is left unchanged.
 
-连接蓝牙耳机后，Mac 总把麦克风也切过去，音质跟着变差？MicGuard 会自动将默认输入切回内置麦克风，手机麦克风也一样。
+Uses Core Audio device notifications without continuous polling. Starts at login and does not record audio or send data.
 
-- 保持你选择的声音输出
-- 后台运行，空闲不轮询
-- 不录音、不上传数据，无第三方依赖
-- 登录后自动启动
+## Behavior
 
-## 一行安装
+- Accepts the current microphone at startup.
+- When a new input device appears, watches for a switch to it for two seconds.
+- If the previous microphone is still connected, attempts to restore it once. Further switches are accepted.
+- Accepts switches to existing devices and fallback selections when the previous microphone disconnects.
 
-打开 Mac 的「终端」，粘贴并回车：
+The previous microphone can be any input device, not just the built-in microphone.
+
+## Install
 
 ```sh
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/LanternCX/micguard/main/install.sh)"
 ```
 
-安装完成即生效，无需重启。**更新也运行同一条命令。**
+Requires Apple's Command Line Tools to compile the Swift source. If they are missing, the script requests installation; complete it and run the command again.
 
-需要 Apple 命令行工具；如果尚未安装，脚本会弹出安装提示，完成后再运行一次即可。已在 macOS 15.7.2 上验证。
+Starts immediately after installation. Run the same command to update. Tested on macOS 15.7.2.
 
-## 怎么确认生效？
+## Stop
 
-打开「系统设置 → 声音 → 输入」，应选中 Mac 内置麦克风。连接耳机后，输出仍可使用耳机。
-
-如果会议或语音软件有独立的麦克风设置，请在软件内也选择 Mac 内置麦克风。
-
-## 暂停使用
-
-想使用其他麦克风？运行以下命令，停止程序并关闭自动启动：
+Stop the service and disable startup at login:
 
 ```sh
-launchctl disable "gui/$(id -u)/local.micguard"; launchctl bootout "gui/$(id -u)/local.micguard"
+launchctl disable "gui/$(id -u)/local.micguard"
+launchctl bootout "gui/$(id -u)/local.micguard"
 ```
 
-恢复时重新运行安装命令即可。
+Run the install command again to re-enable and start the service.
 
-## 一行卸载
+## Uninstall
 
 ```sh
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/LanternCX/micguard/main/install.sh)" -- --uninstall
 ```
 
-停止后台程序，并删除其安装文件、启动配置和日志。
+Removes the service, installed files, and logs.
 
-## 使用说明
+## Limitations
 
-MicGuard 在输入切换后立即纠正，不能保证耳机完全不会短暂进入通话模式。运行期间，手动选择其他默认麦克风也会被切回；没有可用的内置麦克风时不修改输入。
+- Corrects input changes after they occur. Bluetooth headphones may briefly enter call mode.
+- Applications with their own microphone selection must be configured separately.
+- Core Audio does not report whether a switch was manual or automatic. A manual selection of a newly connected device within the two-second window may be reverted once; selecting it again is allowed.
+- Automatic switches outside the connection window are allowed, as are further switches after the first correction. This utility does not lock the input device.
+- Physical reconnection, sleep/wake, and login behavior have not been verified.
 
-程序安装在 `~/Library/Application Support/MicGuard/`，启动配置位于 `~/Library/LaunchAgents/local.micguard.plist`，无需管理员权限。
+## Status
 
-<details>
-<summary>开发与排查</summary>
+```sh
+"$HOME/Library/Application Support/MicGuard/micguard" --status
+launchctl print "gui/$(id -u)/local.micguard"
+```
 
-从本地源码安装：
+The command prints the current input, built-in microphone, and output device IDs. The current input does not need to match the built-in microphone.
+
+Installed files:
+
+- Program and log: `~/Library/Application Support/MicGuard/`
+- LaunchAgent: `~/Library/LaunchAgents/local.micguard.plist`
+
+## Build from source
 
 ```sh
 git clone https://github.com/LanternCX/micguard.git
@@ -62,15 +72,12 @@ cd micguard
 bash install.sh
 ```
 
-查看当前设备与后台服务：
+Written in Swift using Core Audio and AppKit, with no third-party dependencies.
+
+Run the connection policy tests:
 
 ```sh
-"$HOME/Library/Application Support/MicGuard/micguard" --status
-launchctl print "gui/$(id -u)/local.micguard"
+mkdir -p .build
+xcrun swiftc -D POLICY_TESTS Sources/MicGuard.swift Tests/ConnectionPolicyTests.swift -o .build/policy-tests
+.build/policy-tests
 ```
-
-`Default input` 与 `Built-in microphone` 编号相同表示正在使用内置麦克风。日志位于 `~/Library/Application Support/MicGuard/micguard.log`。
-
-使用 Swift、Core Audio 和 AppKit 实现，监听设备变化和唤醒事件。已验证切换到其他输入后自动恢复，以及声音输出保持不变；实际重连、睡眠唤醒和重新登录仍需验证。
-
-</details>

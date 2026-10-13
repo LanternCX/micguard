@@ -45,7 +45,7 @@ if [[ -z "$project_dir" || ! -f "$project_dir/Sources/MicGuard.swift" ]]; then
 fi
 
 mkdir -p "$project_dir/.build"
-xcrun swiftc -O "$project_dir/Sources/MicGuard.swift" -o "$project_dir/.build/micguard"
+xcrun swiftc -parse-as-library -O "$project_dir/Sources/MicGuard.swift" -o "$project_dir/.build/micguard"
 
 # Generate paths through plutil so spaces and XML characters are escaped.
 build_plist="$project_dir/.build/local.micguard.plist"
